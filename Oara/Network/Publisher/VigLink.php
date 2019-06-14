@@ -31,14 +31,14 @@ namespace Oara\Network\Publisher;
  */
 class VigLink extends \Oara\Network
 {
-    private $_apiPassword = null;
+    private $_apiKey = null;
 
     /**
      * @param $credentials
      */
     public function login($credentials)
     {
-        $this->_apiPassword = $credentials["apiPassword"];
+        $this->_apiKey = $credentials["apiKey"];
     }
 
     /**
@@ -47,9 +47,9 @@ class VigLink extends \Oara\Network
     public function checkConnection()
     {
         $connection = false;
-
+               
         $now = new \DateTime();
-        $apiURL = "https://www.viglink.com/service/v1/cuidRevenue?lastDate={$now->format("Y/m/d")}&period=month&secret={$this->_apiPassword}";
+        $apiURL = "https://www.viglink.com/service/v1/cuidRevenue?lastDate={$now->format("Y/m/d")}&period=month&secret={$this->_apiKey}";
         $response = self::call($apiURL);
         if (\is_array($response)) {
             $connection = true;
@@ -65,16 +65,10 @@ class VigLink extends \Oara\Network
         $credentials = array();
 
         $parameter = array();
-        $parameter["description"] = "User Log in";
+        $parameter["description"] = "Api Key";
         $parameter["required"] = true;
-        $parameter["name"] = "User";
-        $credentials["user"] = $parameter;
-
-        $parameter = array();
-        $parameter["description"] = "Password to Log in";
-        $parameter["required"] = true;
-        $parameter["name"] = "Password";
-        $credentials["password"] = $parameter;
+        $parameter["name"] = "ApiKey";
+        $credentials["apiKey"] = $parameter;
 
         return $credentials;
     }
@@ -85,10 +79,42 @@ class VigLink extends \Oara\Network
     public function getMerchantList()
     {
         $merchants = array();
-        $obj = Array();
-        $obj ['cid'] = 1;
-        $obj ['name'] = "VIgLink";
-        $merchants [] = $obj;
+        $n_records = 0;
+ 
+        $apiURL = "https://publishers.viglink.com/api/merchant/search"; 
+        $response = self::call($apiURL);
+        $total_pages = $response['totalPages'];
+       
+        if(isset($response["merchants"])){
+                    foreach ($response["merchants"] as $i) {
+                        $n_records++;
+                        $merchant = Array();
+        
+                        $merchant['id'] = $i["id"];
+                        $merchant['name'] = $i["name"];
+                        $merchant['domains'] = $i["domains"];
+                        $merchants[] = $merchant;
+                    }                     
+        }
+        
+        for ($x = 2; $x <= $total_pages; $x++) {
+                
+                $response = self::call($apiURL."?page=".$x);
+        
+                if(isset($response["merchants"])){
+                            foreach ($response["merchants"] as $i) {
+                                $n_records++;
+                                $merchant = Array();
+
+                                $merchant['id'] = $i["id"];
+                                $merchant['name'] = $i["name"];
+                                $merchant['domains'] = $i["domains"];
+                                $merchants[] = $merchant;
+                            }                     
+                }
+
+        }
+        
         return $merchants;
     }
 
@@ -101,7 +127,7 @@ class VigLink extends \Oara\Network
     public function getTransactionList($merchantList = null, \DateTime $dStartDate = null, \DateTime $dEndDate = null)
     {
         $totalTransactions = array();
-        $apiURL = "https://www.viglink.com/service/v1/cuidRevenue?lastDate={$dEndDate->format("Y/m/d")}&period=month&secret={$this->_apiPassword}";
+        $apiURL = "https://www.viglink.com/service/v1/cuidRevenue?lastDate={$dEndDate->format("Y/m/d")}&period=month&secret={$this->_apiKey}";
         $response = self::call($apiURL);
         foreach ($response as $date => $transactionApi) {
             foreach ($transactionApi[1] as $sale) {
@@ -139,6 +165,11 @@ class VigLink extends \Oara\Network
         \curl_setopt($ch, CURLOPT_HEADER, false);
         // Return data after call is made
         \curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        // set the authorization header
+        if($this->_apiKey)
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Authorization: secret '.$this->_apiKey));
+        
+        
         // Execute the REST call
         $response = \curl_exec($ch);
         $array = \json_decode($response, true);
